@@ -32,15 +32,13 @@ export function evaluateBlurt(concept: Concept, text: string): BlurtResult {
   }));
   const misconceptionHits = evalResult.misconceptionHits.map((m) => m.label);
 
-  // any trap hit marks related ideas incorrect rather than remembered
-  if (misconceptionHits.length) {
-    for (const idea of ideas) {
-      if (idea.classification === 'remembered' && evalResult.coverage < 1) idea.classification = 'partial';
-    }
+  // traps are their own 'incorrect' entries — covered ideas stay remembered
+  for (const hit of misconceptionHits) {
+    ideas.push({ label: hit, classification: 'incorrect' });
   }
 
   const remembered = ideas.filter((i) => i.classification === 'remembered').length;
-  const partial = ideas.filter((i) => i.classification === 'partial').length;
+  const partial = ideas.filter((i) => i.classification === 'partial').length + (misconceptionHits.length ? 1 : 0);
   const score = ideas.length ? (remembered + 0.5 * partial) / ideas.length : evalResult.score;
 
   return {

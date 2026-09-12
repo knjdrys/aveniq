@@ -141,6 +141,9 @@ export function schedule(
     growth *= Math.max(0.5, 1 - 0.12 * attempt.hintsUsed);
     // over-reviewing (still very fresh) grows slower
     if (R > 0.95) growth = Math.max(1.05, growth * 0.75);
+    // intra-session successes (minutes apart) barely grow stability —
+    // stability must be earned against forgetting over real time (req 29)
+    if (elapsedDays < 0.25) growth = 1 + (growth - 1) * 0.12;
 
     next.stabilityDays = Math.min(3650, S * growth);
     next.streak = prev.streak + 1;

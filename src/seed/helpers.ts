@@ -166,7 +166,7 @@ export function C(input: ConceptInput): Concept {
     prerequisites: input.prerequisites ?? [],
     misconceptionDefs: (input.misconceptions ?? []).map((m) => ({
       ...m,
-      id: `md_${input.id}_${m.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}`,
+      id: `md_${input.id}_${m.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
     })),
     examWeight: input.examWeight ?? 0.5,
     difficultyBase: input.difficultyBase ?? 0.5,

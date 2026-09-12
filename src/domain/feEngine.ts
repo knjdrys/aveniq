@@ -7,6 +7,7 @@
  */
 import {
   Concept,
+  Explanation,
   ExplanationStyle,
   FEStage,
   FEState,
@@ -195,4 +196,46 @@ export function feQuestionFilter(
 
 export function feDone(state: FEState): boolean {
   return state.stage === 'done';
+}
+
+/**
+ * Pick the explanation for a FE stage, with stage-appropriate style preference
+ * and personalization (learner style stats). Synthesizes from intro/why/example
+ * content when no curated explanation exists for the stage.
+ */
+export function pickExplanationForStage(
+  concept: Concept,
+  stage: FEStage,
+  stats: Partial<Record<ExplanationStyle, StyleStat>>,
+  triedStyles: ExplanationStyle[],
+): Explanation | null {
+  const layer = stageLayer(stage);
+  const preferred: Record<string, ExplanationStyle[]> = {
+    encounter: ['definition', 'simplified'],
+    why: ['scenario'],
+    analogy: ['analogy'],
+    plain: ['simplified', 'definition'],
+    example: ['example'],
+    build: ['steps', 'worked'],
+  };
+  const styles = preferred[stage] ?? [];
+  // preferred style first (untried), then any explanation at the layer (personalized), then synthetics
+  for (const style of styles) {
+    const hit = concept.explanations.find((e) => e.style === style && !triedStyles.includes(e.style));
+    if (hit) return hit;
+  }
+  const any = pickExplanation(concept, layer, stats, triedStyles);
+  if (any) return any;
+  // synthesized fallbacks from structured content
+  const synth = (style: ExplanationStyle, content: string): Explanation => ({
+    id: `synth_${concept.id}_${stage}_${triedStyles.length}`,
+    style,
+    layer,
+    content,
+    source: 'curated',
+  });
+  if (stage === 'why') return synth('scenario', concept.whyItMatters);
+  if (stage === 'example') return synth('example', concept.examples.simple ?? concept.intro);
+  if (stage === 'encounter') return synth('definition', concept.intro);
+  return null;
 }

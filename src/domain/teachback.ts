@@ -137,7 +137,7 @@ export interface ShortAnswerEvaluation {
 export function evaluateShortAnswer(
   answerText: string,
   keywords: string[][] | undefined,
-  partialKeywords: string[] | undefined,
+  partialKeywords?: string[] | undefined,
 ): ShortAnswerEvaluation {
   const normalized = normalizeText(answerText);
   if (!keywords || keywords.length === 0) {

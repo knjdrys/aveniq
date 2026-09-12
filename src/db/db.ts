@@ -73,6 +73,7 @@ export class AveniqDB extends Dexie {
       insights: 'id, ts, kind',
       events: '++seq, ts, type',
       notes: 'id, conceptId, ts',
+      learner: 'id',
       // v1 pre-release: no resources/readiness tables
     });
     // v2: adds resources + readiness snapshots (real migration path)
@@ -94,6 +95,7 @@ export class AveniqDB extends Dexie {
         insights: 'id, ts, kind',
         events: '++seq, ts, type',
         notes: 'id, conceptId, ts',
+        learner: 'id',
         resources: 'id, conceptId',
         readiness: 'examId, ts',
       })

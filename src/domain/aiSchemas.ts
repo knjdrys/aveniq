@@ -10,7 +10,7 @@ import { Concept, Explanation, ExplanationStyle, KeyIdea, LayerKind, Question } 
 import { uid, wordCount } from './utils';
 
 export type AIRequest =
-  | { type: 'alternative-explanation'; concept: string; layer: LayerKind; triedStyles: ExplanationStyle[] }
+  | { type: 'alternative-explanation'; concept: string; layer: LayerKind; triedStyles?: ExplanationStyle[] }
   | { type: 'generate-question'; concept: string; definition: string; level: string }
   | { type: 'evaluate-teachback'; concept: string; keyIdeas: string[]; learnerText: string }
   | { type: 'socratic-reply'; concept: string; question: string; learnerMessage: string; misconceptions: string[] }

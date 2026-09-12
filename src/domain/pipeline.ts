@@ -47,7 +47,7 @@ export interface AttemptInput {
   score: number; // 0..1
   confidence?: number; // 1..5 (req 27)
   responseMs: number;
-  hintsUsed: number;
+  hintsUsed?: number;
   cognitiveLevel: types.CognitiveLevel;
   /** computed by the caller from question type + delay (see evidenceTypeFor) */
   evidenceType?: EvidenceType;
@@ -62,12 +62,13 @@ export interface AttemptInput {
 /** Evidence type for an attempt (req 74). */
 export function evidenceTypeFor(
   question: Question | null,
-  opts: { daysSincePrev: number; isTeachBack?: boolean; isBlurt?: boolean; kind?: string },
+  opts: { daysSincePrev: number; isTeachBack?: boolean; isBlurt?: boolean; kind?: string; cognitiveLevel?: types.CognitiveLevel },
 ): EvidenceType {
   if (opts.isTeachBack || question?.kind === 'teach-back' || question?.kind === 'free') return 'explanation';
   if (opts.isBlurt || question?.kind === 'blurt') return 'explanation';
+  if (opts.cognitiveLevel === 'explanation') return 'explanation';
   const delayed = opts.daysSincePrev >= 1;
-  switch (question?.cognitiveLevel ?? 'recall') {
+  switch (question?.cognitiveLevel ?? opts.cognitiveLevel ?? 'recall') {
     case 'transfer':
       return 'transfer';
     case 'application':
@@ -132,9 +133,10 @@ export function processAttempt(world: PipelineWorld, input: AttemptInput): Pipel
   const daysSincePrev = lastAttempt ? Math.max(0, (now - lastAttempt.ts) / 86_400_000) : 0;
   const wasDelayed = daysSincePrev >= 1;
 
-  const evidenceType = input.evidenceType ?? evidenceTypeFor(world.question, { daysSincePrev, kind: world.question?.kind });
+  const evidenceType = input.evidenceType ?? evidenceTypeFor(world.question, { daysSincePrev, kind: world.question?.kind, cognitiveLevel: input.cognitiveLevel });
 
   /* 1. ATTEMPT + CONFIDENCE + RESPONSE TIME */
+  const hintsUsed = input.hintsUsed ?? 0;
   const correct = input.score >= 0.7;
   const attempt: Attempt = {
     id: uid('a'),
@@ -146,7 +148,7 @@ export function processAttempt(world: PipelineWorld, input: AttemptInput): Pipel
     score: clamp01(input.score),
     confidence: input.confidence,
     responseMs: input.responseMs,
-    hintsUsed: input.hintsUsed,
+    hintsUsed,
     cognitiveLevel: input.cognitiveLevel,
     evidenceType,
     daysSincePrev,
@@ -156,9 +158,12 @@ export function processAttempt(world: PipelineWorld, input: AttemptInput): Pipel
     context: input.context,
   };
 
-  /* 2. ERROR ANALYSIS — misconceptions & confusion (only on meaningful failure) */
+  /* 2. ERROR ANALYSIS — misconceptions & confusion.
+     Free-text explanations are ALWAYS scanned for misconception traps:
+     a learner can pass overall while smuggling in a wrong idea (req 10, 81). */
   const misconceptionRecords = new Map(world.misconceptions);
-  const triggeredDefs = correct ? [] : detectFromAttempt(concept, attempt, input.givenAnswer);
+  const scanFreeText = input.givenAnswer != null && (evidenceType === 'explanation' || !correct);
+  const triggeredDefs = scanFreeText ? detectFromAttempt(concept, attempt, input.givenAnswer) : [];
   const triggeredFromTags = input.misconceptionIds ?? [];
   const allTriggered = [...new Set([...triggeredDefs, ...triggeredFromTags])];
 
@@ -287,7 +292,8 @@ export function processAttempt(world: PipelineWorld, input: AttemptInput): Pipel
         .map((t) => t.word),
     });
     const { gap } = upsertGap(gaps, root, concept.id, now);
-    gaps = gaps.map((g) => (g.id === gap.id ? gap : g));
+    const exists = gaps.some((g) => g.id === gap.id);
+    gaps = exists ? gaps.map((g) => (g.id === gap.id ? gap : g)) : [...gaps, gap];
     if (gap.occurrences === 1 && gap.cause === 'prerequisite') {
       newInsights.push(insights.gapInsight(gap, now));
     }
@@ -366,6 +372,7 @@ export function processAttempt(world: PipelineWorld, input: AttemptInput): Pipel
     { ts: now, type: 'mastery.updated', payload: { conceptId: concept.id, mastery: Math.round(mastery), prev: Math.round(prevMastery) } },
     { ts: now, type: 'scheduler.updated', payload: { conceptId: concept.id, stabilityDays: state.scheduler.stabilityDays, dueAt: state.scheduler.dueAt, grade: sched.grade } },
   ];
+  if (allTriggered.length > 0) events.push({ ts: now, type: 'misconception.detected', payload: { conceptId: concept.id, defs: allTriggered } });
   if (misconceptionActivated) events.push({ ts: now, type: 'misconception.activated', payload: { conceptId: concept.id } });
   if (confusionActivated) events.push({ ts: now, type: 'confusion.activated', payload: { conceptId: concept.id } });
   if (masteredNow) events.push({ ts: now, type: 'concept.mastered', payload: { conceptId: concept.id } });

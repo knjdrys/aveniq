@@ -78,7 +78,7 @@ export function planSession(input: PlanInput): SegmentPlan[] {
       if (input.newConcepts.length) {
         segments.push({ type: 'first-encounter', conceptIds: input.newConcepts.slice(0, 2), estMinutes: 18, reasonKey: 'seg.first' });
       }
-      segments.push({ type: 'retrieval', conceptIds: due.slice(4).slice(0, 5), estMinutes: 8, reasonKey: 'seg.retrieval' });
+      segments.push({ type: 'retrieval', conceptIds: [...due, ...weak].slice(0, 5), estMinutes: 8, reasonKey: 'seg.retrieval' });
       if (mis.length || weak.length) {
         segments.push({ type: 'review', conceptIds: [...mis, ...weak].slice(0, 3), estMinutes: 7, reasonKey: 'seg.review' });
       }
@@ -161,7 +161,7 @@ export function adapt(
   fatigue: number,
 ): { key: string; params?: Record<string, string | number> }[] {
   const adaptations: { key: string; params?: Record<string, string | number> }[] = [];
-  const recent = lastOutcomes.slice(-3);
+  const recent = lastOutcomes.slice(-4);
   const fails = recent.filter((o) => o.correct === false).length;
 
   if (fails >= 2) {

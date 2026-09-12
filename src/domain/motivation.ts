@@ -13,7 +13,7 @@ export interface XPAward {
   params?: Record<string, string | number>;
 }
 
-export function xpForAttempt(attempt: Attempt, context: { firstSuccess?: boolean; masteryGain?: number }): XPAward[] {
+export function xpForAttempt(attempt: Attempt, context: { firstSuccess?: boolean; masteryGain?: number } = {}): XPAward[] {
   const awards: XPAward[] = [];
   if (!attempt.correct) {
     // struggling still earns a little: engagement with feedback is learning

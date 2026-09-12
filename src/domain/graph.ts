@@ -52,7 +52,7 @@ export function findPrereqGaps(
   masteryBelow: (id: ID) => boolean,
 ): PrereqGap {
   const { order, chain } = ancestors(conceptId, prerequisites);
-  const missing = order.filter(masteryBelow);
+  const missing = order.filter((id) => id !== conceptId && masteryBelow(id));
   // chain from concept to the deepest missing prerequisite
   const chainPath: ID[] = [];
   if (missing.length > 0) {

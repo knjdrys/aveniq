@@ -5,7 +5,6 @@
  * about concept A (and vice versa) → create A↔B confusion, teach the distinction.
  */
 import { ConfusionPair, ID } from './types';
-import { uid } from './utils';
 
 export function pairId(a: ID, b: ID): string {
   return [a, b].sort().join('::');
@@ -49,7 +48,7 @@ export function applyChoice(
     };
   }
   const pair: ConfusionPair = {
-    id: uid('cp'),
+    id: id,
     aId,
     bId,
     abCount: choseA ? 1 : 0,
