@@ -15,6 +15,7 @@ export function LibraryView() {
   const states = useLiveQuery(() => services.db.conceptStates.toArray(), [], []);
   const [filter, setFilter] = useState<'all' | 'unknown' | 'learning' | 'mastered' | 'weak' | 'due'>('all');
   const [q, setQ] = useState('');
+  const [cap, setCap] = useState(120); // render cap keeps huge libraries smooth (req 66)
 
   const stateOf = (id: string) => states.find((s) => s.conceptId === id);
 
@@ -60,7 +61,7 @@ export function LibraryView() {
       </div>
 
       {subjects.map((subject) => {
-        const subjectConcepts = filtered.filter((c) => c.subjectId === subject.id);
+        const subjectConcepts = filtered.filter((c) => c.subjectId === subject.id).slice(0, cap);
         if (!subjectConcepts.length) return null;
         const subjectTopics = topics.filter((t) => t.subjectId === subject.id);
         return (
@@ -111,6 +112,13 @@ export function LibraryView() {
         );
       })}
       {!filtered.length && <Empty icon="library">No concepts match. Try clearing the filter.</Empty>}
+      {filtered.length > cap && (
+        <div className="center mt">
+          <button className="btn" onClick={() => setCap(cap + 120)}>
+            Show more ({filtered.length - cap} hidden)
+          </button>
+        </div>
+      )}
     </div>
   );
 }

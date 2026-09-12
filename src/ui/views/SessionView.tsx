@@ -152,6 +152,7 @@ function FEFlow({
   const services = useServices();
   const [view, setView] = useState<FEView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tbResult, setTbResult] = useState<TeachBackEvaluation | null>(null);
 
   useEffect(() => {
     void services.fe.start(conceptId, sessionId).then(setView);
@@ -291,13 +292,43 @@ function FEFlow({
       {state.stage === 'teach-back' && (
         <TeachBackStage concept={concept} onSubmit={async (text) => {
           const evalRes = evaluateTeachBack(concept, text);
+          setTbResult(evalRes);
           await adv({ type: 'check-passed' }, { text, score: evalRes.score, givenAnswer: text });
           return evalRes;
         }} />
       )}
 
+      {/* teach-back results overlay: keep visible after the flow advanced */}
+      {tbResult && state.stage !== 'teach-back' && (
+        <div className="card mt">
+          <h2 className="mb">Your explanation, checked</h2>
+          <div className={`insight ${tbResult.score >= 0.7 ? 'good' : 'warn'}`}>
+            <strong>
+              {tbResult.verdict === 'strong' ? 'Strong explanation' : tbResult.verdict === 'partial' ? 'Partly there' : 'Keep building'}
+            </strong>{' '}
+            — covered {Math.round(tbResult.coverage * 100)}% of the key ideas
+            {tbResult.misconceptionHits.length > 0 && '; a trap was detected in your words — it’s now on your gap list for targeted correction'}
+            {tbResult.jargonFlags.length > 0 && `; jargon to unpack: ${tbResult.jargonFlags.join(', ')}`}.
+          </div>
+          <div className="tb-ideas">
+            {tbResult.ideaResults.map((idea, i) => (
+              <div key={i} className={`tb-idea ${idea.covered ? 'hit' : 'miss'}`}>
+                <Icon name={idea.covered ? 'check' : 'gaps'} size={14} />
+                {idea.idea.label}
+              </div>
+            ))}
+            {tbResult.misconceptionHits.map((m, i) => (
+              <div key={`t${i}`} className="tb-idea trap"><Icon name="x" size={14} />{m.label}</div>
+            ))}
+            {tbResult.hasExample && <div className="tb-idea hit"><Icon name="check" size={14} />You included an example (+bonus)</div>}
+          </div>
+          <button className="btn primary" onClick={() => setTbResult(null)}>Continue →</button>
+        </div>
+      )}
+
+
       {/* ---- scheduled ---- */}
-      {state.stage === 'scheduled' && (
+      {state.stage === 'scheduled' && !tbResult && (
         <>
           <h2 className="mb">Locked into memory — see you soon</h2>
           <p className="read">
@@ -330,6 +361,16 @@ function CheckStage({
   const [checked, setChecked] = useState(false);
   const [wasCorrect, setWasCorrect] = useState(false);
   const startRef = useRef(Date.now());
+
+  // failed check → the flow stays on stage with a simpler explanation: reset the form
+  useEffect(() => {
+    setChecked(false);
+    setChosen(null);
+    setAnswer('');
+    setConfidence(null);
+    setScaffold('none');
+    startRef.current = Date.now();
+  }, [view.state.failedChecks, view.state.stage]);
 
   if (!q) {
     return (
@@ -370,6 +411,16 @@ function CheckStage({
   return (
     <>
       <h2 className="mb">{STAGE_LABEL[view.state.stage]}</h2>
+      {view.state.simplified && view.explanation && (
+        <div className="insight info mb" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+          <div><strong>Let’s make it simpler, then try again.</strong></div>
+          <div className="read small" style={{ marginTop: 6 }}>
+            {view.explanation.content.split(/\n+/).map((para, i) => (
+              <p key={i}><VocabText text={para} concept={view.concept} knownVocabulary={new Set()} /></p>
+            ))}
+          </div>
+        </div>
+      )}
       {q.scenario && <div className="q-scenario">{q.scenario}</div>}
       <div className="q-prompt"><VocabText text={q.prompt} concept={view.concept} knownVocabulary={new Set()} /></div>
 
@@ -420,7 +471,7 @@ function CheckStage({
           <strong>Correct.</strong> {q.answer ? `The idea: ${q.answer}` : 'This will be remembered because you produced it yourself.'}
         </div>
       )}
-      {checked && !wasCorrect && <div className="tiny muted mt">Let’s see what happened — a simpler explanation is coming.</div>}
+      {checked && !wasCorrect && <div className="tiny muted mt">Not it — a simpler explanation and another try are coming up.</div>}
     </>
   );
 }
@@ -479,7 +530,7 @@ function TeachBackStage({
             ))}
             {result.hasExample && <div className="tb-idea hit"><Icon name="check" size={14} />Included an example (+bonus)</div>}
           </div>
-          <div className="tiny muted">Continuing automatically…</div>
+          <div className="tiny muted">See how your explanation scored ↑ (and keep going below when ready).</div>
         </div>
       )}
     </>

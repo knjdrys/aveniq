@@ -263,6 +263,12 @@ export class FEService {
       if (!explanation && state.stylesTried.length > 0) {
         explanation = pickExplanationForStage(concept, state.stage, learner.styleStats, []) ?? undefined;
       }
+    } else if (['guided-check', 'confirm', 'apply'].includes(state.stage) && state.simplified) {
+      // after a failed check: surface the simpler explanation before the retry (req 13 stage 10)
+      explanation =
+        pickExplanationForStage(concept, 'plain', learner.styleStats, []) ??
+        concept.explanations.find((e) => e.layer === 'eli5') ??
+        explanation;
     }
     let prereqGaps: FEView['prereqGaps'] = [];
     if (state.stage === 'prereq-check') {
