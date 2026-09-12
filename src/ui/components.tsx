@@ -36,6 +36,9 @@ const paths: Record<string, string> = {
   review: 'M12 5V2L7 6.5 12 11V8c3.3 0 6 2.7 6 6s-2.7 6-6 6-6-2.7-6-6H4c0 4.4 3.6 8 8 8s8-3.6 8-8-3.6-8-8-8z',
   arrow: 'M5 13l7 7 7-7h-4V4h-6v9H5z',
   blurt: 'M4 5h16v2H4V5zm0 5h10v2H4v-2zm0 5h16v2H4v-2zm0 5h7v2H4v-2z',
+  play: 'M8 5v14l11-7L8 5z',
+  plus: 'M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5z',
+  clock: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 5h-2v6l5 3 1-1.7-4-2.3V7z',
   compare: 'M9 3 5 7l4 4V8h4V6H9V3zm6 14v3l4-4-4-4v3h-4v2h4z',
 };
 
@@ -216,10 +219,16 @@ export function VocabText({
 
 /* ---------------- misc ---------------- */
 
-export function Empty({ icon = 'spark', children }: { icon?: string; children: React.ReactNode }) {
+export function Empty({
+  glyph, icon, title, body, children,
+}: {
+  glyph?: string; icon?: string; title?: string; body?: string; children?: React.ReactNode;
+}) {
   return (
     <div className="empty">
-      <div className="big"><Icon name={icon} size={34} /></div>
+      <div className="empty-art" aria-hidden="true">{glyph ?? <Icon name={icon ?? 'spark'} size={30} />}</div>
+      {title && <div className="empty-title">{title}</div>}
+      {body && <p className="empty-body">{body}</p>}
       {children}
     </div>
   );

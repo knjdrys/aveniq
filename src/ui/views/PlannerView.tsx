@@ -117,3 +117,6 @@ export function PlannerView() {
     </div>
   );
 }
+
+/** StudyBuddy calls this screen Plan — same engine, friendlier name. */
+export const PlanView = PlannerView;

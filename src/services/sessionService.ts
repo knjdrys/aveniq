@@ -30,6 +30,8 @@ export interface SessionStartInput {
   focus?: StudySession['focus'];
   /** specific concepts (e.g. "learn this concept now") */
   conceptIds?: ID[];
+  /** restrict the adaptive plan to one subject */
+  subjectId?: ID;
 }
 
 /**
@@ -84,6 +86,40 @@ export class SessionService {
     private clock: Clock = realClock,
   ) {}
 
+  /**
+   * Preview the plan a session would get, without creating it — powers the
+   * session setup dialog's live preview (StudyBuddy UX pattern).
+   */
+  async preview(input: SessionStartInput = {}): Promise<{ plan: SegmentPlan[]; reasonKey: string }> {
+    const learner = await this.learning.getLearner();
+    const minutes = input.minutes ?? learner.settings.defaultSessionMinutes;
+    const now = this.clock.now();
+    const states = await this.learning.statesMap();
+    const concepts = await this.db.concepts.toArray();
+    const pool = input.subjectId ? concepts.filter((c) => c.subjectId === input.subjectId) : concepts;
+    const prereqMap = new Map(pool.filter((c) => c.prerequisites.length).map((c) => [c.id, c.prerequisites]));
+    const dueConcepts = pool.filter((c) => states.get(c.id) && isDue(states.get(c.id)!.scheduler, now)).map((c) => c.id);
+    const weakConcepts = pool.filter((c) => { const s = states.get(c.id); return s && s.attempts >= 2 && s.mastery < 45; }).map((c) => c.id);
+    const newConcepts = unlockFrontier(pool.map((c) => c.id), prereqMap, (id) => (states.get(id)?.mastery ?? 0) >= 45)
+      .filter((id) => { const s = states.get(id); return !s || (s.firstSeenAt == null && s.attempts === 0); });
+    const misconceptionConcepts = (await this.db.misconceptions.where('status').equals('active').toArray()).map((m) => m.conceptId);
+    const gapConcepts = (await this.db.gaps.where('status').equals('open').toArray()).map((g) => g.conceptId);
+    const confusionPairs: [ID, ID][] = (await this.db.confusionPairs.where('status').equals('active').toArray()).map((p) => [p.aId, p.bId] as [ID, ID]);
+
+    const focusKind = input.focus?.type;
+    if (focusKind && ['due', 'weak', 'compare', 'application', 'blurt'].includes(focusKind)) {
+      const learned = pool.filter((c) => (states.get(c.id)?.attempts ?? 0) >= 1).map((c) => c.id);
+      const plan = focusedPlan(focusKind as 'due', minutes, { due: dueConcepts, weak: weakConcepts, pairs: confusionPairs, learned })
+        .filter((seg) => seg.conceptIds.length > 0 || seg.type === 'reflection');
+      return { plan, reasonKey: `focus.${focusKind}` };
+    }
+    const plan = planSession({
+      minutes, now, dueConcepts, weakConcepts, newConcepts,
+      gapConcepts, misconceptionConcepts, confusionPairs,
+    });
+    return { plan, reasonKey: 'session.smart' };
+  }
+
   /** Create a session with an adaptive plan for the available time (req 32). */
   async start(input: SessionStartInput = {}): Promise<StudySession> {
     const learner = await this.learning.getLearner();
@@ -91,7 +127,8 @@ export class SessionService {
     const now = this.clock.now();
 
     const states = await this.learning.statesMap();
-    const concepts = await this.db.concepts.toArray();
+    const allConcepts = await this.db.concepts.toArray();
+    const concepts = input.subjectId ? allConcepts.filter((c) => c.subjectId === input.subjectId) : allConcepts;
     const prereqMap = new Map(concepts.filter((c) => c.prerequisites.length).map((c) => [c.id, c.prerequisites]));
 
     const dueConcepts: ID[] = [];

@@ -1,132 +1,140 @@
 /**
- * Practice (goal view): deliberate practice by intent — retrieval, fixing
- * weak spots, contrast training for mix-ups, application, brain dump,
- * exam practice. "You have N minutes — here's the best way to use them."
+ * Practice — StudyBuddy's structure: per-subject panels (readiness,
+ * practice exam + quick check), then focused modes (AVENIQ's engine),
+ * then recent practice.
  */
-import React, { useState } from 'react';
+import React from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useServices, navigate } from '../../appContext';
-import { Icon, useToast } from '../components';
+import { useServices } from '../../appContext';
+import { Icon } from '../components';
+import { useRunner } from '../runnerHost';
 
 export function PracticeView() {
   const services = useServices();
-  const toast = useToast();
-  const [minutes, setMinutes] = useState(10);
-  const [busy, setBusy] = useState<string | null>(null);
-
+  const runner = useRunner();
+  const subjects = useLiveQuery(() => services.db.subjects.toArray(), [], []);
   const concepts = useLiveQuery(() => services.db.concepts.toArray(), [], []);
   const states = useLiveQuery(() => services.db.conceptStates.toArray(), [], []);
+  const sessions = useLiveQuery(() => services.db.sessions.orderBy('startedAt').reverse().limit(30).toArray(), [], []);
+
+  const stateOf = (id: string) => states.find((s) => s.conceptId === id);
+  const questionCount = (subjectId: string) => concepts.filter((c) => c.subjectId === subjectId).reduce((n, c) => n + Math.max(1, 0), 0);
+
+  const learnedTotal = states.filter((s) => s.attempts >= 1).length;
   const pairs = useLiveQuery(() => services.db.confusionPairs.where('status').equals('active').toArray(), [], []);
-  const exams = useLiveQuery(() => services.db.exams.toArray(), [], []);
-
-  const name = (id: string) => concepts.find((c) => c.id === id)?.name ?? id;
-  const due = states.filter((s) => s.scheduler.lastReviewedAt != null && Date.now() >= s.scheduler.dueAt).length;
+  const misconceptions = useLiveQuery(() => services.db.misconceptions.where('status').equals('active').toArray(), [], []);
   const weak = states.filter((s) => s.attempts >= 2 && s.mastery < 45).length;
-  const learned = states.filter((s) => s.attempts >= 1).length;
 
-  const start = async (kind: 'due' | 'weak' | 'compare' | 'application' | 'blurt') => {
-    setBusy(kind);
-    try {
-      const session = await services.sessions.start({ minutes, focus: { type: kind } });
-      if (!session.items.length) {
-        toast('Nothing to practice here yet — learn a concept first.', 'error');
-        await services.sessions.abandon(session.id);
-        return;
-      }
-      navigate(`/session/${session.id}`);
-    } catch {
-      toast('Could not start practice.', 'error');
-    } finally {
-      setBusy(null);
-    }
-  };
+  // recent finished sessions as practice history
+  const recent = sessions.filter((s) => s.status === 'completed' && s.executed.length).slice(0, 5);
+  const attemptsAll = useLiveQuery(() => services.db.attempts.orderBy('ts').reverse().limit(200).toArray(), [], []);
 
   return (
-    <div className="content">
-      <div className="view-head">
-        <h1>Practice with intent</h1>
-        <div className="sub">Each mode targets a different kind of knowing — pick what today needs.</div>
+    <div>
+      <div className="page-head">
+        <div className="grow">
+          <div className="page-kicker">Practice</div>
+          <h1 className="page-title">Put it to work</h1>
+          <p className="page-sub">Recall shows you remember; practice shows you can use it. Papers are interleaved on purpose — that’s how exams test, and how memory strengthens.</p>
+        </div>
       </div>
 
-      <div className="row mb">
-        <span className="tiny muted">Time:</span>
-        {[5, 10, 25, 60].map((m) => (
-          <button key={m} className={`time-chip ${minutes === m ? 'active' : ''}`} onClick={() => setMinutes(m)}>{m}m</button>
-        ))}
-      </div>
+      {subjects.length ? (
+        <div className="subject-grid">
+          {subjects.map((s) => {
+            const own = concepts.filter((c) => c.subjectId === s.id);
+            const avg = own.length ? Math.round(own.reduce((n, c) => n + (stateOf(c.id)?.mastery ?? 0), 0) / own.length) : 0;
+            const learned = own.filter((c) => (stateOf(c.id)?.attempts ?? 0) >= 1).length;
+            return (
+              <div className="panel" key={s.id} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                <div className="split">
+                  <h2 style={{ fontSize: 18 }}>{s.name}</h2>
+                  <span className="chip">{avg}% ready</span>
+                </div>
+                <p className="small muted">{own.length} concepts · {learned} in progress. Papers target what needs work.</p>
+                <div className="btn-row">
+                  <button className="btn btn-primary" onClick={() => runner.open({ kind: 'exam-setup', subjectId: s.id })}>
+                    <Icon name="target" size={15} /> Practice paper
+                  </button>
+                  <button className="btn" onClick={() => runner.open({ kind: 'exam-setup', subjectId: s.id })}>Quick check</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="empty">
+          <div className="empty-art">◎</div>
+          <div className="empty-title">Nothing to practice yet</div>
+          <p className="empty-body">Learn a concept first — then papers, application drills and contrast training unlock here.</p>
+          <a className="btn btn-primary" href="#/learn">Go learn something</a>
+        </div>
+      )}
 
-      <div className="quick-grid" style={{ marginTop: 0 }}>
-        <PracticeCard
-          icon="review" tint="primary" title="Retrieval practice"
-          desc={due > 0 ? `${due} concepts due — recall without hints, from memory` : 'Recall what you’ve learned, from memory'}
-          badge={due > 0 ? `${due} due` : undefined}
-          disabled={learned === 0} busy={busy === 'due'}
-          onClick={() => start('due')}
+      <div className="section-label mt-4"><h3>Focused practice</h3></div>
+      <div className="subject-grid">
+        <ModeCard
+          icon="review" title="Retrieval" desc="Recall from memory, no hints — the core memory builder."
+          disabled={learnedTotal === 0} onClick={() => runner.open({ kind: 'session-setup', minutes: 10, focus: { type: 'due' } } as never)}
         />
-        <PracticeCard
-          icon="gaps" tint="amber" title="Fix weak spots"
-          desc={weak > 0 ? `${weak} concepts below mastery — targeted repair with scaffolding` : 'Nothing weak right now'}
-          disabled={weak === 0} busy={busy === 'weak'}
-          onClick={() => start('weak')}
+        <ModeCard
+          icon="gaps" title="Weak spots" desc={`${weak} concepts below mastery — targeted repair with scaffolding.`}
+          disabled={weak === 0} onClick={() => runner.open({ kind: 'session-setup', minutes: 10, focus: { type: 'weak' } } as never)}
         />
-        <PracticeCard
-          icon="compare" tint="coral" title="Contrast training"
-          desc={pairs.length ? `You’ve mixed up ${pairs.length} pair${pairs.length > 1 ? 's' : ''}: ${pairs.slice(0, 2).map((p) => `${name(p.aId)} ↔ ${name(p.bId)}`).join(', ')}` : 'Appears when you mix up two similar concepts'}
-          disabled={pairs.length === 0} busy={busy === 'compare'}
-          onClick={() => start('compare')}
+        <ModeCard
+          icon="compare" title="Contrast training" desc={pairs.length ? `${pairs.length} pair${pairs.length > 1 ? 's' : ''} you keep mixing up.` : 'Appears when you mix up similar concepts.'}
+          disabled={pairs.length === 0} onClick={() => runner.open({ kind: 'session-setup', minutes: 10, focus: { type: 'compare' } } as never)}
         />
-        <PracticeCard
-          icon="target" tint="blue" title="Application"
-          desc="Use ideas in new situations — the difference between knowing words and knowing"
-          disabled={learned === 0} busy={busy === 'application'}
-          onClick={() => start('application')}
+        <ModeCard
+          icon="blurt" title="Brain dump" desc="Write everything you remember — we map the gaps."
+          disabled={learnedTotal === 0} onClick={() => runner.open({ kind: 'session-setup', minutes: 5, focus: { type: 'blurt' } } as never)}
         />
-        <PracticeCard
-          icon="blurt" tint="violet" title="Brain dump"
-          desc="Timed memory dump — write everything you know, we map the gaps"
-          disabled={learned === 0} busy={busy === 'blurt'}
-          onClick={() => start('blurt')}
+        <ModeCard
+          icon="sound" title="Teach-back" desc="Explain a concept in your own words — the strongest test."
+          disabled={learnedTotal === 0} onClick={() => runner.open({ kind: 'session-setup', minutes: 10, focus: { type: 'application' } } as never)}
         />
-        {exams.length > 0 && (
-          <PracticeCard
-            icon="exams" tint="green" title="Exam practice"
-            desc={`${exams.length} exam${exams.length > 1 ? 's' : ''} tracked — interleaved practice tests`}
-            onClick={() => navigate('/exams')}
+        {misconceptions.length > 0 && (
+          <ModeCard
+            icon="x" title="Trap correction" desc={`${misconceptions.length} active misconception${misconceptions.length > 1 ? 's' : ''} — error-first correction.`}
+            onClick={() => { window.location.hash = '#/review'; }}
           />
         )}
       </div>
 
-      <div className="card mt">
-        <h3 className="mb">Why these modes exist</h3>
-        <div className="small muted">
-          Recognition is the weakest form of knowledge. Retrieval from memory strengthens it; application in a new
-          context proves it; explaining it — teach-back, brain dump — is the strongest test of all.
-          Mix-ups get contrast training because similar concepts interfere with each other in memory.
-        </div>
-      </div>
+      {recent.length > 0 && (
+        <>
+          <div className="section-label mt-4"><h3>Recent practice</h3></div>
+          {recent.map((s) => {
+            const correct = s.executed.filter((e) => e.correct).length;
+            const pct = s.executed.length ? Math.round((correct / s.executed.length) * 100) : 0;
+            return (
+              <div className="row" key={s.id} style={{ cursor: 'default' }}>
+                <Icon name="target" size={16} />
+                <div className="row-main">
+                  <div className="row-title">Session · {new Date(s.startedAt).toLocaleDateString()}</div>
+                  <div className="row-sub">{s.executed.length} items · {s.plannedMinutes} min planned</div>
+                </div>
+                <span className="chip" style={pct >= 80 ? { background: 'var(--moss-soft)', color: 'var(--moss)' } : pct >= 60 ? { background: 'var(--amber-soft)', color: 'var(--amber-strong)' } : { background: 'var(--berry-soft)', color: 'var(--berry)' }}>
+                  {pct}%
+                </span>
+              </div>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }
 
-function PracticeCard({
-  icon, tint, title, desc, badge, disabled, busy, onClick,
-}: {
-  icon: string; tint: string; title: string; desc: string; badge?: string;
-  disabled?: boolean; busy?: boolean; onClick: () => void;
-}) {
+function ModeCard({ icon, title, desc, disabled, onClick }: { icon: string; title: string; desc: string; disabled?: boolean; onClick: () => void }) {
   return (
-    <button
-      className="quick-card"
-      onClick={onClick}
-      disabled={disabled || busy}
-      style={{ opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
-    >
-      <span className={`quick-ico chip ${tint}`} style={{ borderRadius: 11, width: 38, height: 38 }}>
-        <Icon name={icon} size={19} />
+    <button className="panel" style={{ display: 'flex', gap: 12, alignItems: 'flex-start', textAlign: 'left', opacity: disabled ? 0.55 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }} disabled={disabled} onClick={onClick}>
+      <span className="quick-ico" style={{ background: 'var(--pine-faint)', color: 'var(--pine-strong)' }}>
+        <Icon name={icon} size={18} />
       </span>
       <span>
-        <span className="t">{title}{badge ? ` · ${badge}` : ''}</span>
-        <span className="d" style={{ display: 'block' }}>{busy ? 'Planning…' : desc}</span>
+        <span style={{ display: 'block', fontWeight: 650 }}>{title}</span>
+        <span className="small muted" style={{ display: 'block', marginTop: 2 }}>{desc}</span>
       </span>
     </button>
   );

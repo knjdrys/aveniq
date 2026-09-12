@@ -36,16 +36,16 @@ beforeAll(async () => {
 vi.spyOn(console, 'error').mockImplementation(() => {});
 
 const ROUTES = [
-  ['/#/home', ['Your next best move', 'Home']],
-  ['/#/learn', ['Learn something new', 'Zero prior knowledge']],
-  ['/#/practice', ['Practice with intent', 'Retrieval practice']],
-  ['/#/review', ['Keep memory alive', 'What’s blocking you']],
+  ['/#/home', ['What are we working on today', 'Next best action', 'Home']],
+  ['/#/learn', ['Your subjects', 'concepts']],
+  ['/#/practice', ['Put it to work', 'Focused practice']],
+  ['/#/review', ['Spacing does the heavy lifting', 'Review']],
   ['/#/library', ['Library', 'Primary Key']],
   ['/#/map', ['Learning map']],
   ['/#/progress', ['Progress', 'Real signals only']],
   ['/#/exams', ['Exams', 'Explainable readiness']],
-  ['/#/planner', ['Study planner', 'day-by-day']],
-  ['/#/ingest', ['Add material']],
+  ['/#/plan', ['plan', 'Plan']],
+  ['/#/tutor', ['Ask, don’t tell', 'Tutor']],
   ['/#/settings', ['Settings', 'Mastery checkpoints']],
 ] as const;
 
@@ -62,9 +62,9 @@ describe('UI smoke (all views boot)', () => {
     for (let i = 0; i < 80; i++) {
       await new Promise((r) => setTimeout(r, 100));
       html = rootEl.innerHTML;
-      if (html.includes('Your next best move')) break;
+      if (html.includes('Next best action')) break;
     }
-    expect(html).toContain('Your next best move');
+    expect(html).toContain('Next best action');
     expect(html).toContain('Home');
 
     // seed content made it in

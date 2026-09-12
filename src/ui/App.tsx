@@ -1,85 +1,113 @@
 /**
- * AVENIQ shell — goal-first navigation (StudyBuddy UX pattern, AVENIQ engine).
- *
- * Primary nav answers learner goals: Home · Learn · Practice · Review · Progress.
- * System tools (Map, Library, Exams, Planner) sit below; Settings & Add material
- * at the rail foot. Runners (study sessions) open as focused full-screen
- * overlays, never as nav destinations. First run opens onboarding.
+ * AVENIQ shell — StudyBuddy's UX architecture on AVENIQ's engine.
+ * Sidebar wordmark + goal nav (Home · Learn · Practice · Review · Progress),
+ * secondary tools, topbar with inline search + streak/XP pills, mobile
+ * bottom nav, ⌘K command palette with quick actions, runner overlays.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ServicesContext, getServices, navigate, currentRoute, parseRoute } from '../appContext';
 import { ToastProvider, Icon } from './components';
+import { RunnerProvider } from './runnerHost';
 import { Onboarding } from './views/Onboarding';
 import { HomeView } from './views/HomeView';
-import { LearnView } from './views/LearnView';
+import { LearnView, SubjectView } from './views/LearnView';
 import { PracticeView } from './views/PracticeView';
 import { ReviewView } from './views/ReviewView';
-import { LibraryView } from './views/LibraryView';
-import { ConceptView } from './views/ConceptView';
-import { SessionView } from './views/SessionView';
-import { MapView } from './views/MapView';
 import { ProgressView } from './views/ProgressView';
-import { ExamsView } from './views/ExamsView';
-import { PlannerView } from './views/PlannerView';
+import { PlanView } from './views/PlannerView';
+import { LibraryView } from './views/LibraryView';
 import { IngestView } from './views/IngestView';
+import { ConceptView } from './views/ConceptView';
+import { MapView } from './views/MapView';
+import { ExamsView } from './views/ExamsView';
 import { SettingsView } from './views/SettingsView';
 import { SearchIndex } from '../domain/search';
 import { seedIfEmpty } from '../seed';
+import { useRunner } from './runnerHost';
 
-/* ---------------- nav model ---------------- */
+/* ---------------- nav model (StudyBuddy IA) ---------------- */
 
 const GOALS = [
-  { path: '/home', label: 'Home', icon: 'home', title: 'Home', sub: 'Your next best move' },
-  { path: '/learn', label: 'Learn', icon: 'spark', title: 'Learn', sub: 'New concepts, from zero' },
-  { path: '/practice', label: 'Practice', icon: 'target', title: 'Practice', sub: 'Retrieve, apply, compare' },
-  { path: '/review', label: 'Review', icon: 'review', title: 'Review', sub: 'Keep memory alive' },
-  { path: '/progress', label: 'Progress', icon: 'progress', title: 'Progress', sub: 'Real signals only' },
+  { path: '/home', label: 'Home', icon: 'home' },
+  { path: '/learn', label: 'Learn', icon: 'library' },
+  { path: '/practice', label: 'Practice', icon: 'target' },
+  { path: '/review', label: 'Review', icon: 'review' },
+  { path: '/progress', label: 'Progress', icon: 'progress' },
 ];
 
 const TOOLS = [
-  { path: '/map', label: 'Map', icon: 'map', title: 'Learning map', sub: 'Foundations → advanced' },
-  { path: '/library', label: 'Library', icon: 'library', title: 'Library', sub: 'Everything you can learn' },
-  { path: '/exams', label: 'Exams', icon: 'exams', title: 'Exams', sub: 'Explainable readiness' },
-  { path: '/planner', label: 'Plan', icon: 'planner', title: 'Study planner', sub: 'A living day-by-day plan' },
-];
-
-const FOOT = [
-  { path: '/ingest', label: 'Add', icon: 'import', title: 'Add material', sub: 'Paste anything — review before it’s saved' },
-  { path: '/settings', label: 'Settings', icon: 'settings', title: 'Settings', sub: 'Everything lives on this device' },
+  { path: '/plan', label: 'Plan', icon: 'planner' },
+  { path: '/map', label: 'Map', icon: 'map' },
+  { path: '/exams', label: 'Exams', icon: 'exams' },
+  { path: '/library', label: 'Library', icon: 'import' },
+  { path: '/tutor', label: 'Tutor', icon: 'sound' },
+  { path: '/settings', label: 'Settings', icon: 'settings' },
 ];
 
 const MOBILE_BOTTOM = ['/home', '/learn', '/practice', '/review'];
 
-/* ---------------- search palette (⌘K) ---------------- */
+/* ---------------- command palette (⌘K): search + quick actions ---------------- */
 
-function SearchPalette({ onClose }: { onClose: () => void }) {
+interface QuickAction { id: string; label: string; hint?: string; icon: string; run: () => void }
+
+function useQuickActions(): QuickAction[] {
+  const runner = useRunner();
+  return useMemo(() => [
+    { id: 'session', label: 'Start a study session', hint: 'Best use of your time, sized to your day', icon: 'play', run: () => runner.open({ kind: 'session-setup' }) },
+    { id: 'review-due', label: 'Review due concepts', hint: 'Clear the review queue', icon: 'review', run: () => navigate('/review') },
+    { id: 'learn', label: 'Learn a new concept', hint: 'From zero — vocabulary, analogy, example', icon: 'spark', run: () => navigate('/learn') },
+    { id: 'blurt', label: 'Brain dump', hint: 'Write everything you remember, find the gaps', icon: 'blurt', run: () => runner.open({ kind: 'session-setup', minutes: 5 }) },
+    { id: 'exam', label: 'Take a practice exam', hint: 'Interleaved, exam-style', icon: 'exams', run: () => navigate('/practice') },
+    { id: 'material', label: 'Add material', hint: 'Paste notes — review before they’re saved', icon: 'import', run: () => navigate('/library') },
+  ], [runner]);
+}
+
+function Palette({ onClose }: { onClose: () => void }) {
   const services = getServices();
+  const actions = useQuickActions();
   const [q, setQ] = useState('');
   const [index, setIndex] = useState<SearchIndex | null>(null);
   useEffect(() => {
     void services.content.buildSearchIndex().then(setIndex);
   }, [services]);
   const hits = useMemo(() => (index && q.length >= 2 ? index.query(q) : []), [index, q]);
+  const showActions = q.length < 2;
+
   return (
     <div className="palette-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="palette" role="dialog" aria-label="Search">
+      <div className="palette" role="dialog" aria-label="Command palette">
         <input
           autoFocus
-          placeholder="Search concepts, questions, notes…"
+          placeholder="Search concepts or type a command…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Escape') onClose();
-            if (e.key === 'Enter' && hits[0]) {
-              go(hits[0].kind, hits[0].id);
+            if (e.key === 'Enter') {
+              if (hits[0]) navigate(`/concept/${hits[0].id}`);
+              else if (showActions && actions[0]) actions[0].run();
               onClose();
             }
           }}
         />
         <div className="results">
-          {hits.map((h) => (
-            <button key={`${h.kind}-${h.id}`} className="p-hit" onClick={() => { go(h.kind, h.id); onClose(); }}>
+          {showActions && (
+            <>
+              <div className="p-kind" style={{ padding: '8px 12px 2px' }}>Quick actions</div>
+              {actions.map((a) => (
+                <button key={a.id} className="p-hit" onClick={() => { a.run(); onClose(); }}>
+                  <span style={{ color: 'var(--pine)', display: 'grid', placeItems: 'center', width: 20 }}><Icon name={a.icon} size={15} /></span>
+                  <span>
+                    <div style={{ fontWeight: 600 }}>{a.label}</div>
+                    {a.hint && <div className="tiny muted">{a.hint}</div>}
+                  </span>
+                </button>
+              ))}
+            </>
+          )}
+          {!showActions && hits.map((h) => (
+            <button key={`${h.kind}-${h.id}`} className="p-hit" onClick={() => { navigate(h.kind === 'subject' ? `/subject/${h.id}` : h.kind === 'concept' ? `/concept/${h.id}` : '/library'); onClose(); }}>
               <span className="p-kind">{h.kind}</span>
               <span>
                 <div style={{ fontWeight: 600 }}>{h.title}</div>
@@ -94,33 +122,6 @@ function SearchPalette({ onClose }: { onClose: () => void }) {
   );
 }
 
-function go(kind: string, id: string) {
-  if (kind === 'concept') navigate(`/concept/${id}`);
-  else navigate('/library');
-}
-
-/* ---------------- more sheet (mobile) ---------------- */
-
-function MoreSheet({ onClose }: { onClose: () => void }) {
-  const items = [...TOOLS, ...FOOT];
-  return (
-    <div className="sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="sheet" role="dialog" aria-label="More">
-        {items.map((n) => (
-          <a key={n.path} className="onboard-choice" href={`#${n.path}`} onClick={onClose}>
-            <Icon name={n.icon} size={18} />
-            <span style={{ fontWeight: 600 }}>{n.label === 'Add' ? 'Add material' : n.label === 'Plan' ? 'Planner' : n.label}</span>
-          </a>
-        ))}
-        <a className="onboard-choice" href="#/progress" onClick={onClose}>
-          <Icon name="progress" size={18} />
-          <span style={{ fontWeight: 600 }}>Progress</span>
-        </a>
-      </div>
-    </div>
-  );
-}
-
 /* ---------------- app ---------------- */
 
 export function App() {
@@ -129,7 +130,6 @@ export function App() {
   const [booted, setBooted] = useState(false);
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     const onHash = () => setRoute(currentRoute());
@@ -169,7 +169,6 @@ export function App() {
     [],
     0,
   );
-  // learner query must not run before boot created the row (writes are illegal in liveQuery)
   const learner = useLiveQuery(
     () => (booted ? services.learning.getLearner() : Promise.resolve(null)),
     [booted],
@@ -179,9 +178,9 @@ export function App() {
 
   if (!booted || onboarded === null) {
     return (
-      <div className="center" style={{ paddingTop: '22vh' }}>
-        <div style={{ fontFamily: 'var(--font-ui)', fontWeight: 700, letterSpacing: '0.22em' }}>AVENIQ</div>
-        <p className="muted">Preparing your learning system…</p>
+      <div style={{ display: 'grid', placeItems: 'center', minHeight: '100dvh' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 640, fontSize: 22 }}>Aven<em>iq</em></div>
+        <p className="muted small">Preparing your learning system…</p>
       </div>
     );
   }
@@ -196,127 +195,126 @@ export function App() {
     );
   }
 
-  /* runners: full-screen focused overlays */
-  if (path === '/session') {
-    return (
-      <ServicesContext.Provider value={services}>
-        <ToastProvider>
-          <div className="runner">
-            <SessionView sessionId={param} />
-          </div>
-        </ToastProvider>
-      </ServicesContext.Provider>
-    );
-  }
-
-  const active = [...GOALS, ...TOOLS, ...FOOT].find((n) => n.path === path) ?? GOALS[0];
-
   const view = (() => {
     switch (path) {
       case '/learn': return <LearnView />;
+      case '/subject': return <SubjectView subjectId={param ?? ''} />;
       case '/practice': return <PracticeView />;
       case '/review': return <ReviewView />;
-      case '/today': return <HomeView />;
+      case '/progress': return <ProgressView />;
+      case '/plan': return <PlanView />;
       case '/library': return <LibraryView />;
+      case '/ingest': return <IngestView />;
       case '/concept': return <ConceptView conceptId={param ?? ''} />;
       case '/map': return <MapView />;
-      case '/gaps': return <ReviewView />;
-      case '/progress': return <ProgressView />;
       case '/exams': return <ExamsView />;
-      case '/planner': return <PlannerView />;
-      case '/ingest': return <IngestView />;
       case '/settings': return <SettingsView />;
-      default: return <HomeView />;
+      case '/tutor': return <TutorStub />;
+      case '/today': case '/home': default: return <HomeView />;
     }
   })();
+
+  const activePath = path === '/today' ? '/home' : path;
+  const activeItem = [...GOALS, ...TOOLS].find((n) => n.path === activePath);
 
   return (
     <ServicesContext.Provider value={services}>
       <ToastProvider>
-        <a className="skip-link" href="#main-content">Skip to content</a>
-        <div className="shell">
-          <nav className="rail" aria-label="Main">
-            <div className="rail-brand" title="AVENIQ — from unknown to understood">
-              <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true">
-                <path d="M14 46 C 26 46, 30 32, 46 32" stroke="var(--primary)" strokeWidth="4" fill="none" strokeLinecap="round" strokeDasharray="4 7" />
-                <circle cx="14" cy="46" r="5.5" fill="var(--primary)" />
-                <circle cx="30" cy="39.5" r="5" fill="var(--amber)" />
-                <circle cx="50" cy="32" r="6" fill="var(--green)" />
-              </svg>
-            </div>
-            <div className="rail-section">Goals</div>
-            {GOALS.map((n) => (
-              <a key={n.path} href={`#${n.path}`} className={`rail-item ${path === n.path ? 'active' : ''}`} aria-current={path === n.path ? 'page' : undefined}>
-                <Icon name={n.icon} size={21} />
-                {n.label}
-                {n.path === '/review' && dueCount > 0 && <span className="rail-badge">{dueCount}</span>}
+        <RunnerProvider>
+          <a className="skip-link" href="#main-content">Skip to content</a>
+          <div className="shell">
+            <aside className="shell-sidebar">
+              <a className="wordmark" href="#/home">
+                <span className="wordmark-mark">
+                  <svg width="19" height="19" viewBox="0 0 64 64" aria-hidden="true">
+                    <path d="M14 46 C 26 46, 30 32, 46 32" stroke="currentColor" strokeWidth="5" fill="none" strokeLinecap="round" strokeDasharray="4 7" />
+                    <circle cx="14" cy="46" r="6" fill="currentColor" />
+                    <circle cx="46" cy="32" r="6.5" fill="currentColor" />
+                  </svg>
+                </span>
+                <span>
+                  <span className="wordmark-name">Aven<em>iq</em></span>
+                  <span className="wordmark-tag">unknown → understood</span>
+                </span>
               </a>
-            ))}
-            <div className="rail-section">System</div>
-            {TOOLS.map((n) => (
-              <a key={n.path} href={`#${n.path}`} className={`rail-item ${path === n.path ? 'active' : ''}`} aria-current={path === n.path ? 'page' : undefined}>
-                <Icon name={n.icon} size={21} />
-                {n.label}
-              </a>
-            ))}
-            <div className="rail-foot">
-              {FOOT.map((n) => (
-                <a key={n.path} href={`#${n.path}`} className={`rail-item ${path === n.path ? 'active' : ''}`} aria-current={path === n.path ? 'page' : undefined}>
-                  <Icon name={n.icon} size={21} />
-                  {n.label}
-                </a>
-              ))}
-            </div>
-          </nav>
 
-          <div className="main-col">
-            <header className="topbar">
-              <div>
-                <div className="topbar-title">{active.title}</div>
-                <div className="topbar-sub">{active.sub}</div>
+              <nav aria-label="Goals">
+                {GOALS.map((n) => (
+                  <a key={n.path} href={`#${n.path}`} className={`nav-item ${activePath === n.path ? 'active' : ''}`} aria-current={activePath === n.path ? 'page' : undefined}>
+                    <Icon name={n.icon} size={17} />
+                    {n.label}
+                    {n.path === '/review' && dueCount > 0 && <span className="nav-badge">{dueCount}</span>}
+                  </a>
+                ))}
+              </nav>
+
+              <div className="nav-group" />
+              <nav aria-label="Tools">
+                {TOOLS.map((n) => (
+                  <a key={n.path} href={`#${n.path}`} className={`nav-item ${activePath === n.path ? 'active' : ''}`} aria-current={activePath === n.path ? 'page' : undefined}>
+                    <Icon name={n.icon} size={17} />
+                    {n.label}
+                  </a>
+                ))}
+              </nav>
+
+              <div className="sidebar-foot">
+                <p className="sidebar-note">
+                  Everything lives on this device. Your learning history belongs to you.
+                </p>
               </div>
-              <div className="spacer" />
-              {learner && (
-                <>
-                  {learner.streakDays > 0 && (
-                    <span className="chip-stat" title="Days with at least one successful retrieval">
-                      <span className="dot" style={{ background: 'var(--amber)' }} />
-                      {learner.streakDays}d
+            </aside>
+
+            <div className="shell-main">
+              <header className="topbar">
+                <div className="topbar-search" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setPaletteOpen(true)}>
+                  <Icon name="search" size={15} />
+                  <input placeholder="Search or jump to…" readOnly aria-label="Open search" />
+                  <span className="search-kbd kbd">⌘K</span>
+                </div>
+                <div className="topbar-right">
+                  {learner && learner.streakDays > 0 && (
+                    <span className="pill warm" title="Day streak — earned by real learning acts">
+                      <Icon name="flame" size={13} /> {learner.streakDays}d
                     </span>
                   )}
-                  <span className="chip-stat" title="Experience — earned by real learning acts">L{learner.level}</span>
-                </>
-              )}
-              <button className="search-pill" onClick={() => setPaletteOpen(true)}>
-                <Icon name="search" size={15} />
-                <span className="search-label">Search</span>
-                <span className="kbd" style={{ marginLeft: 'auto' }}>⌘K</span>
-              </button>
-            </header>
+                  {learner && <span className="pill" title="Level — XP from evidence-weighted learning">L{learner.level} · {learner.xp} XP</span>}
+                  {dueCount > 0 && <a className="pill due" href="#/review" title="Concepts due for review"><Icon name="review" size={13} /> {dueCount} due</a>}
+                </div>
+              </header>
 
-            <div className="main-scroll" id="main-content">
-              {view}
+              <main className="shell-content" id="main-content">
+                {view}
+              </main>
             </div>
           </div>
-        </div>
 
-        <nav className="bottom-nav" aria-label="Mobile">
-          {GOALS.filter((n) => MOBILE_BOTTOM.includes(n.path)).map((n) => (
-            <a key={n.path} href={`#${n.path}`} className={`rail-item ${path === n.path ? 'active' : ''}`}>
-              <Icon name={n.icon} size={20} />
-              {n.label}
-              {n.path === '/review' && dueCount > 0 && <span className="rail-badge">{dueCount}</span>}
+          <nav className="bottomnav" aria-label="Mobile">
+            {GOALS.filter((n) => MOBILE_BOTTOM.includes(n.path)).map((n) => (
+              <a key={n.path} href={`#${n.path}`} className={`nav-item ${activePath === n.path ? 'active' : ''}`}>
+                <Icon name={n.icon} size={20} />
+                {n.label}
+              </a>
+            ))}
+            <a href="#/settings" className={`nav-item ${activePath === '/settings' ? 'active' : ''}`}>
+              <Icon name="more" size={20} />
+              More
             </a>
-          ))}
-          <button className={`rail-item ${moreOpen ? 'active' : ''}`} onClick={() => setMoreOpen(true)}>
-            <Icon name="more" size={20} />
-            More
-          </button>
-        </nav>
+          </nav>
 
-        {paletteOpen && <SearchPalette onClose={() => setPaletteOpen(false)} />}
-        {moreOpen && <MoreSheet onClose={() => setMoreOpen(false)} />}
+          {paletteOpen && <Palette onClose={() => setPaletteOpen(false)} />}
+        </RunnerProvider>
       </ToastProvider>
     </ServicesContext.Provider>
   );
+}
+
+/* Tutor gets a proper view of its own (AVENIQ's Socratic engine) */
+function TutorStub() {
+  const [Tutor, setTutor] = useState<React.ComponentType | null>(null);
+  useEffect(() => {
+    void import('./views/TutorView').then((m) => setTutor(() => m.TutorView));
+  }, []);
+  if (!Tutor) return <div className="panel muted">Loading tutor…</div>;
+  return <Tutor />;
 }

@@ -8,6 +8,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useServices, navigate } from '../../appContext';
 import { Empty, Icon, useToast, VocabText } from '../components';
+import { useRunner } from '../runnerHost';
 import { Concept, Question, StudySession, FEState, CognitiveLevel, FE_STAGES } from '../../domain/types';
 import { FEView } from '../../services/feService';
 import { hintForLevel, nextScaffold, SCAFFOLD_LADDER, scaffoldPenalty, ScaffoldLevel } from '../../domain/scaffold';
@@ -62,6 +63,7 @@ export function SessionView({ sessionId }: { sessionId?: string }) {
 function SessionRunner({ session }: { session: StudySession }) {
   const services = useServices();
   const toast = useToast();
+  const runner = useRunner();
   const [fatigue, setFatigue] = useState<{ level: number; recommendation: string } | null>(null);
 
   const doneIds = new Set(session.executed.map((o) => o.itemId));
@@ -99,9 +101,9 @@ function SessionRunner({ session }: { session: StudySession }) {
           <span className="muted">{segLabel || 'Study'}</span>
           <span className="row" style={{ gap: 12 }}>
             <span className="muted">{itemNumber} / {total} · {session.plannedMinutes} min</span>
-            <a className="btn subtle sm" href="#/home" aria-label="Exit session">
+            <button className="btn subtle sm" onClick={() => runner.close()} aria-label="Exit session">
               <Icon name="x" size={15} /> Exit
-            </a>
+            </button>
           </span>
         </div>
         <div className="progress-track" role="progressbar" aria-valuenow={Math.round(((itemNumber - 1) / Math.max(1, total)) * 100)} aria-valuemax={total} aria-valuemin={0}>
@@ -112,7 +114,7 @@ function SessionRunner({ session }: { session: StudySession }) {
       {fatigue && fatigue.level >= 2 && (
         <div className="card row between" style={{ borderColor: 'var(--amber)' }}>
           <div className="small"><strong>Feeling heavy?</strong> {fatigue.recommendation}</div>
-          <button className="btn subtle sm" onClick={() => navigate('/home')}>Wrap up</button>
+          <button className="btn subtle sm" onClick={() => { runner.close(); navigate('/home'); }}>Wrap up</button>
         </div>
       )}
 
@@ -903,6 +905,7 @@ function InlineCompareQuestion({
 function SessionSummary({ session }: { session: StudySession }) {
   const services = useServices();
   const toast = useToast();
+  const runner = useRunner();
   const [reflection, setReflection] = useState({ clearer: '', confusing: '', revisit: '' });
   const [saved, setSaved] = useState(session.status !== 'active' && !!session.reflection);
   const xp = useMemo(() => session.executed.filter((o) => o.correct).length * 10, [session.executed]);
@@ -916,6 +919,7 @@ function SessionSummary({ session }: { session: StudySession }) {
     });
     setSaved(true);
     toast('Session saved.', 'info');
+    runner.close();
     navigate('/home');
   };
 
@@ -942,7 +946,7 @@ function SessionSummary({ session }: { session: StudySession }) {
             <button className="btn primary" onClick={finish}>Save session</button>
           </>
         ) : (
-          <a className="btn primary" href="#/home">Back to Home</a>
+          <button className="btn primary" onClick={() => { runner.close(); navigate('/home'); }}>Back to Home</button>
         )}
       </div>
     </>

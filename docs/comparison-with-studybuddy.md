@@ -183,3 +183,34 @@ They're siblings in philosophy but different species in scope:
 If they merged, the ideal product is StudyBuddy's question brain, onboarding, PWA and
 sync layered onto AVENIQ's knowledge graph, learner model, and first-encounter engine —
 each is exactly what the other lacks.
+
+---
+
+## Update — the port (Sept 2026)
+
+Per the user's direction, AVENIQ's UI/UX has been **rebuilt as a faithful copy of
+StudyBuddy's, start to finish** — StudyBuddy's design system, information
+architecture, screens, flows and runners now wrap AVENIQ's engine:
+
+- **Design system**: StudyBuddy's `style.css` is now AVENIQ's base (Fraunces +
+  Inter via Google Fonts, paper/ink/pine/amber tokens, dark theme, 232px shell
+  sidebar, topbar, bottom nav, panels/rows/chips/dialogs/toasts), extended with
+  AVENIQ-only learning components (FE stage strip, error-first correction,
+  layer tabs, compare columns, map, choice lists, flashcard runner).
+- **Information architecture**: Goals nav (Home · Learn · Practice · Review ·
+  Progress) + tools (Plan · Map · Exams · Library · Tutor · Settings), ⌘K
+  command palette with quick actions, inline search.
+- **Screens**: StudyBuddy's home (hero next-best-action + Today + Continue
+  learning + insight + weekstrip), subject covers grid → subject page →
+  concept depth, practice panels + focused modes, review queue grouped by
+  subject + mistakes + deepen + AVENIQ blockers, 4-step onboarding (You →
+  Subject → Goal → Time, with paste → reviewable drafts and samples).
+- **Runners as full-screen overlays**: session setup dialog with live plan
+  preview (subject, time chips, intent chips), session runner, cards runner
+  (grades feed the real scheduler), blurt runner (idea-level gap map),
+  Feynman runner, exam setup + runner.
+
+AVENIQ remains "better" underneath: every StudyBuddy pattern is wired to the
+adaptive engine (stability-aware scheduling, mastery gates, misconception and
+confusion detection, prerequisite frontier, evidence-weighted readiness) rather
+than a simpler model.

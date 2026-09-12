@@ -6,6 +6,7 @@
 import React, { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useServices, navigate } from '../../appContext';
+import { useRunner } from '../runnerHost';
 import { Empty, Icon, Ring, StateChip, useToast, VocabText } from '../components';
 import { LAYER_LABELS, LAYER_ORDER, LayerKind, ExplanationStyle } from '../../domain/types';
 import { masteryGateReport, DEFAULT_CHECKPOINTS } from '../../domain/mastery';
@@ -15,6 +16,7 @@ import { t } from '../../domain/i18n';
 
 export function ConceptView({ conceptId }: { conceptId: string }) {
   const services = useServices();
+  const runner = useRunner();
   const toast = useToast();
   const concept = useLiveQuery(() => services.db.concepts.get(conceptId), [conceptId], undefined);
   const state = useLiveQuery(() => services.db.conceptStates.get(conceptId), [conceptId], undefined);
@@ -63,7 +65,7 @@ export function ConceptView({ conceptId }: { conceptId: string }) {
     setStarting(true);
     try {
       const session = await services.sessions.start({ minutes: 12, conceptIds: [conceptId] });
-      navigate(`/session/${session.id}`);
+      runner.open({ kind: 'session', sessionId: session.id });
     } catch {
       toast('Could not start.', 'error');
     } finally {
