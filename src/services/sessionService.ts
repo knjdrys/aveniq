@@ -32,6 +32,51 @@ export interface SessionStartInput {
   conceptIds?: ID[];
 }
 
+/**
+ * Focused practice plans (Practice goal view): shape the segment mix to the
+ * learner's chosen intent instead of the general adaptive mix.
+ */
+function focusedPlan(
+  kind: 'due' | 'weak' | 'compare' | 'application' | 'blurt',
+  minutes: number,
+  pools: { due: ID[]; weak: ID[]; pairs: [ID, ID][]; learned: ID[] },
+): SegmentPlan[] {
+  const m = Math.max(4, minutes);
+  switch (kind) {
+    case 'due':
+      return [
+        { type: 'warmup', conceptIds: pools.due.slice(0, 2), estMinutes: Math.min(4, m / 3), reasonKey: 'seg.warmup' },
+        { type: 'retrieval', conceptIds: pools.due.slice(2, 8), estMinutes: Math.max(3, m - 4), reasonKey: 'seg.retrieval' },
+        { type: 'reflection', conceptIds: [], estMinutes: 1, reasonKey: 'seg.reflection' },
+      ];
+    case 'weak':
+      return [
+        { type: 'review', conceptIds: pools.weak.slice(0, 4), estMinutes: Math.max(3, m - 3), reasonKey: 'seg.review' },
+        { type: 'retrieval', conceptIds: pools.weak.slice(4, 8), estMinutes: 3, reasonKey: 'seg.retrieval' },
+        { type: 'reflection', conceptIds: [], estMinutes: 1, reasonKey: 'seg.reflection' },
+      ];
+    case 'compare':
+      return [
+        ...pools.pairs.slice(0, Math.max(1, Math.floor(m / 4))).map(
+          (p): SegmentPlan => ({ type: 'comparison', conceptIds: [p[0], p[1]], estMinutes: 3, reasonKey: 'seg.comparison' }),
+        ),
+        { type: 'reflection', conceptIds: [], estMinutes: 1, reasonKey: 'seg.reflection' },
+      ];
+    case 'application':
+      return [
+        { type: 'application', conceptIds: pools.learned.slice(0, 4), estMinutes: Math.max(4, m - 4), reasonKey: 'seg.application' },
+        { type: 'retrieval', conceptIds: pools.learned.slice(4, 7), estMinutes: 3, reasonKey: 'seg.retrieval' },
+        { type: 'reflection', conceptIds: [], estMinutes: 1, reasonKey: 'seg.reflection' },
+      ];
+    case 'blurt':
+      return [
+        { type: 'blurt', conceptIds: pools.learned.slice(0, 3), estMinutes: Math.max(4, m - 3), reasonKey: 'seg.blurt' },
+        { type: 'retrieval', conceptIds: pools.learned.slice(3, 6), estMinutes: 3, reasonKey: 'seg.retrieval' },
+        { type: 'reflection', conceptIds: [], estMinutes: 1, reasonKey: 'seg.reflection' },
+      ];
+  }
+}
+
 export class SessionService {
   constructor(
     private db: AveniqDB,
@@ -84,7 +129,16 @@ export class SessionService {
     );
 
     let plan: SegmentPlan[];
-    if (input.conceptIds?.length) {
+    const focusKind = input.focus?.type;
+    if (focusKind && ['due', 'weak', 'compare', 'application', 'blurt'].includes(focusKind)) {
+      const learnedConcepts = concepts.filter((c) => (states.get(c.id)?.attempts ?? 0) >= 1).map((c) => c.id);
+      plan = focusedPlan(focusKind as 'due' | 'weak' | 'compare' | 'application' | 'blurt', minutes, {
+        due: dueConcepts,
+        weak: weakConcepts,
+        pairs: confusionPairs,
+        learned: learnedConcepts,
+      }).filter((seg2) => seg2.conceptIds.length > 0 || seg2.type === 'reflection');
+    } else if (input.conceptIds?.length) {
       // targeted session (e.g. "learn this concept")
       const targeted: SegmentPlan[] = [
         { type: 'first-encounter', conceptIds: input.conceptIds, estMinutes: Math.min(12, minutes), reasonKey: 'seg.first' },

@@ -36,33 +36,36 @@ beforeAll(async () => {
 vi.spyOn(console, 'error').mockImplementation(() => {});
 
 const ROUTES = [
-  ['/#/today', ['What should I study right now', 'Library']],
+  ['/#/home', ['Your next best move', 'Home']],
+  ['/#/learn', ['Learn something new', 'Zero prior knowledge']],
+  ['/#/practice', ['Practice with intent', 'Retrieval practice']],
+  ['/#/review', ['Keep memory alive', 'What’s blocking you']],
   ['/#/library', ['Library', 'Primary Key']],
   ['/#/map', ['Learning map']],
-  ['/#/gaps', ['Gaps', 'Confused pairs']],
   ['/#/progress', ['Progress', 'Real signals only']],
-  ['/#/exams', ['Exams']],
-  ['/#/planner', ['Study planner']],
+  ['/#/exams', ['Exams', 'Explainable readiness']],
+  ['/#/planner', ['Study planner', 'day-by-day']],
   ['/#/ingest', ['Add material']],
   ['/#/settings', ['Settings', 'Mastery checkpoints']],
 ] as const;
 
 describe('UI smoke (all views boot)', () => {
   it('renders app shell + every route', async () => {
+    localStorage.setItem('aveniq.onboarded', '1'); // skip onboarding in smoke
     const { App } = await import('../../src/ui/App');
     const rootEl = document.getElementById('root')!;
     const root: Root = createRoot(rootEl);
     root.render(React.createElement(React.StrictMode, null, React.createElement(App)));
 
-    // wait for boot (seed + learner)
+    // wait for boot (seed + learner + shell)
     let html = '';
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 80; i++) {
       await new Promise((r) => setTimeout(r, 100));
       html = rootEl.innerHTML;
-      if (html.includes('unknown → understood')) break;
+      if (html.includes('Your next best move')) break;
     }
-    expect(html).toContain('unknown → understood');
-    expect(html).toContain('Today');
+    expect(html).toContain('Your next best move');
+    expect(html).toContain('Home');
 
     // seed content made it in
     for (let i = 0; i < 60 && !html.includes('Database'); i++) {

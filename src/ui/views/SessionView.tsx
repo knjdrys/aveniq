@@ -45,12 +45,12 @@ export function SessionView({ sessionId }: { sessionId?: string }) {
     undefined,
   );
 
-  if (session === undefined) return <div className="content" />; // loading
+  if (session === undefined) return <div className="runner-body" />; // loading
   if (!session) {
     return (
-      <div className="content">
+      <div className="runner-body">
         <Empty icon="learn">
-          No active session. Head to <a href="#/today">Today</a> and press “Start”.
+          No active session. Head to <a href="#/home">Home</a> and press “Start”.
         </Empty>
       </div>
     );
@@ -75,7 +75,7 @@ function SessionRunner({ session }: { session: StudySession }) {
   }, [session.executed.length, session.id, services]);
 
   if (session.status !== 'active' || finished) {
-    return <SessionSummary session={session} />;
+    return <div className="runner-body"><SessionSummary session={session} /></div>;
   }
 
   const item = session.items[idx];
@@ -93,11 +93,16 @@ function SessionRunner({ session }: { session: StudySession }) {
   };
 
   return (
-    <div className="content" style={{ maxWidth: 720 }}>
-      <div className="session-top">
+    <div className="runner-body">
+      <div className="runner-top">
         <div className="row between small" style={{ marginBottom: 6 }}>
           <span className="muted">{segLabel || 'Study'}</span>
-          <span className="muted">{itemNumber} / {total} · {session.plannedMinutes} min session</span>
+          <span className="row" style={{ gap: 12 }}>
+            <span className="muted">{itemNumber} / {total} · {session.plannedMinutes} min</span>
+            <a className="btn subtle sm" href="#/home" aria-label="Exit session">
+              <Icon name="x" size={15} /> Exit
+            </a>
+          </span>
         </div>
         <div className="progress-track" role="progressbar" aria-valuenow={Math.round(((itemNumber - 1) / Math.max(1, total)) * 100)} aria-valuemax={total} aria-valuemin={0}>
           <div className="progress-fill" style={{ width: `${(itemNumber - 1) / Math.max(1, total) * 100}%` }} />
@@ -107,7 +112,7 @@ function SessionRunner({ session }: { session: StudySession }) {
       {fatigue && fatigue.level >= 2 && (
         <div className="card row between" style={{ borderColor: 'var(--amber)' }}>
           <div className="small"><strong>Feeling heavy?</strong> {fatigue.recommendation}</div>
-          <button className="btn subtle sm" onClick={() => navigate('/today')}>Wrap up</button>
+          <button className="btn subtle sm" onClick={() => navigate('/home')}>Wrap up</button>
         </div>
       )}
 
@@ -911,11 +916,11 @@ function SessionSummary({ session }: { session: StudySession }) {
     });
     setSaved(true);
     toast('Session saved.', 'info');
-    navigate('/today');
+    navigate('/home');
   };
 
   return (
-    <div className="content" style={{ maxWidth: 720 }}>
+    <>
       <div className="card card-pad-lg center">
         <div style={{ fontSize: 40 }}>🧠</div>
         <h1 className="mb">{session.executed.length} items completed</h1>
@@ -937,9 +942,9 @@ function SessionSummary({ session }: { session: StudySession }) {
             <button className="btn primary" onClick={finish}>Save session</button>
           </>
         ) : (
-          <a className="btn primary" href="#/today">Back to Today</a>
+          <a className="btn primary" href="#/home">Back to Home</a>
         )}
       </div>
-    </div>
+    </>
   );
 }

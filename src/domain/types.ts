@@ -553,7 +553,7 @@ export interface StudySession {
     revisit?: ID | '';
     ts: number;
   };
-  focus: { type: 'due' | 'weak' | 'new' | 'gap' | 'exam' | 'mixed'; conceptId?: ID; examId?: ID };
+  focus: { type: 'due' | 'weak' | 'new' | 'gap' | 'exam' | 'mixed' | 'compare' | 'application' | 'blurt'; conceptId?: ID; examId?: ID };
   updatedAt: number;
 }
 

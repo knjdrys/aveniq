@@ -31,11 +31,17 @@ const paths: Record<string, string> = {
   code: 'M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z',
   import: 'M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-6 14h-2v-4H7l5-5 5 5h-4v4z',
   more: 'M6 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z',
+  home: 'M12 3 2 12h3v8h6v-6h2v6h6v-8h3L12 3z',
+  target: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 4a6 6 0 1 1 0 12 6 6 0 0 1 0-12zm0 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4z',
+  review: 'M12 5V2L7 6.5 12 11V8c3.3 0 6 2.7 6 6s-2.7 6-6 6-6-2.7-6-6H4c0 4.4 3.6 8 8 8s8-3.6 8-8-3.6-8-8-8z',
+  arrow: 'M5 13l7 7 7-7h-4V4h-6v9H5z',
+  blurt: 'M4 5h16v2H4V5zm0 5h10v2H4v-2zm0 5h16v2H4v-2zm0 5h7v2H4v-2z',
+  compare: 'M9 3 5 7l4 4V8h4V6H9V3zm6 14v3l4-4-4-4v3h-4v2h4z',
 };
 
-export function Icon({ name, size = 20 }: { name: string; size?: number }) {
+export function Icon({ name, size = 20, style }: { name: string; size?: number; style?: React.CSSProperties }) {
   return (
-    <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={style}>
       <path d={paths[name] ?? paths.spark} />
     </svg>
   );
